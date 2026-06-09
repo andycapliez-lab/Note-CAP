@@ -30,6 +30,17 @@ with col2:
             "Cat F : Chariot de manutention tout-terrain"
         ]
     )
+    # --- NOUVEAU MENU DÉROULANT POUR LES CLASSES ---
+    classe = st.selectbox(
+        "Classe du Candidat",
+        [
+            "CAP 1 A",
+            "CAP 1 B",
+            "CAP 2 A",
+            "CAP 2 B",
+            "CAP 1AN"
+        ]
+    )
 
 st.divider()
 
@@ -76,9 +87,10 @@ st.divider()
 if not nom_candidat:
     st.info("💡 Veuillez entrer le nom du candidat pour débloquer le bouton de téléchargement Excel.")
 else:
-    # Préparation des données pour le fichier Excel
+    # Préparation des données incluant la classe pour le fichier Excel
     donnees_eval = {
         "Candidat": [nom_candidat],
+        "Classe": [classe],  # Ajout de la classe dans la colonne Excel
         "Évaluateur": [formateur],
         "Date": [str(date_eval)],
         "Engin": [engin],
@@ -103,6 +115,6 @@ else:
     st.download_button(
         label="💾 Générer et Partager le fichier Excel (.xlsx)",
         data=buffer,
-        file_name=f"evaluation_{nom_candidat.replace(' ', '_')}_{date_eval}.xlsx",
+        file_name=f"evaluation_{classe.replace(' ', '_')}_{nom_candidat.replace(' ', '_')}.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
