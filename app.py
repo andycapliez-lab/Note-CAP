@@ -1,17 +1,13 @@
 import streamlit as st
 import pandas as pd
 from datetime import datetime
-from streamlit_gsheets import GSheetsConnection
+import io
 
 # Configuration de la page
 st.set_page_config(page_title="Évaluation CAP Conducteur d'Engins", layout="centered")
 
 st.title("🚜 Grille d'Évaluation - CAP Conducteur d'Engins")
-st.write("Formulaire terrain connecté directement à Google Sheets.")
-
-# --- CONNEXION SECURISÉE À GOOGLE SHEETS ---
-# On crée la connexion avec le tableau en ligne
-conn = st.connection("gsheets", type=GSheetsConnection)
+st.write("Formulaire terrain avec exportation et partage Excel direct.")
 
 # --- 1. INFORMATIONS GÉNÉRALES ---
 st.header("📋 Informations Générales")
@@ -39,6 +35,9 @@ st.divider()
 
 # --- 2. GRILLE DE NOTATION ---
 st.header("🎯 Barème et Compétences")
+st.write("Notez chaque module de 0 à 20 :")
+
+# Dictionnaire pour stocker les notes
 notes = {}
 
 st.subheader("1. Prise de poste & Vérifications")
@@ -48,14 +47,14 @@ st.subheader("2. Conduite et Maîtrise de l'engin")
 notes["conduite"] = st.slider("Souplesse, précision, respect des cycles de travail", 0, 20, 10)
 
 st.subheader("3. Respect des Règles de Sécurité")
-notes["securite"] = st.slider("Signalisation, gestes barrières, conduite défensive, piétons", 0, 20, 10)
+notes["securite"] = st.slider("Signalisation, conduite défensive, piétons", 0, 20, 10)
 if notes["securite"] < 10:
-    st.warning("⚠️ Attention : Note en sécurité inférieure à 10.")
+    st.warning("⚠️ Attention : Une note inférieure à 10 en sécurité est éliminatoire.")
 
 st.subheader("4. Fin de poste & Entretien")
 notes["fin_de_poste"] = st.slider("Stationnement sécurisé, nettoyage, rapport d'anomalies", 0, 20, 10)
 
-commentaires = st.text_area("✍️ Commentaires et observations")
+commentaires = st.text_area("✍️ Commentaires et observations (points forts / axes d'amélioration)")
 
 st.divider()
 
@@ -65,47 +64,45 @@ moyenne = sum(notes.values()) / len(notes)
 st.metric(label="Moyenne Générale", value=f"{moyenne:.2f} / 20")
 
 if moyenne >= 10 and notes["securite"] >= 10:
-    st.success("🎉 Avis : **FAVORABLE**")
+    st.success("🎉 Avis de l'évaluateur : **FAVORABLE** (Aptitude validée)")
     statut = "Favorable"
 else:
-    st.error("❌ Avis : **INSUFFISANT**")
+    st.error("❌ Avis de l'évaluateur : **INSUFFISANT** (À perfectionner)")
     statut = "Insuffisant"
 
 st.divider()
 
-# --- 4. ENVOI EN DIRECT SUR GOOGLE SHEETS ---
-if st.button("🚀 Valider et Envoyer l'évaluation"):
-    if not nom_candidat:
-        st.error("⚠️ Veuillez entrer le nom du candidat avant d'envoyer.")
-    else:
-        with st.spinner("Envoi des données sur Google Sheets..."):
-            try:
-                # 1. Lire les données existantes du Google Sheet pour ne pas les effacer
-                donnees_existantes = conn.read()
-                
-                # 2. Préparer la nouvelle ligne
-                nouvelle_ligne = pd.DataFrame([{
-                    "Candidat": nom_candidat,
-                    "Évaluateur": formateur,
-                    "Date": str(date_eval),
-                    "Engin": engin,
-                    "Prise de poste": notes["prise_de_poste"],
-                    "Conduite": notes["conduite"],
-                    "Sécurité": notes["securite"],
-                    "Fin de poste": notes["fin_de_poste"],
-                    "Moyenne": round(moyenne, 2),
-                    "Statut": statut,
-                    "Commentaires": commentaires
-                }])
-                
-                # 3. Fusionner l'ancien tableau avec la nouvelle ligne
-                tableau_mis_a_jour = pd.concat([donnees_existantes, nouvelle_ligne], ignore_index=True)
-                
-                # 4. Renvoyer le tout sur Google Sheets
-                conn.update(data=tableau_mis_a_jour)
-                
-                st.success(f"✅ L'évaluation de {nom_candidat} a bien été ajoutée au Google Sheet ! Vous pouvez quitter la page.")
-                st.balloons()
-                
-            except Exception as e:
-                st.error(f"Une erreur est survenue lors de la connexion à Google Sheets : {e}")
+# --- 4. EXPORT EXCEL ---
+if not nom_candidat:
+    st.info("💡 Veuillez entrer le nom du candidat pour débloquer le bouton de téléchargement Excel.")
+else:
+    # Préparation des données pour le fichier Excel
+    donnees_eval = {
+        "Candidat": [nom_candidat],
+        "Évaluateur": [formateur],
+        "Date": [str(date_eval)],
+        "Engin": [engin],
+        "Prise de poste": [notes["prise_de_poste"]],
+        "Conduite": [notes["conduite"]],
+        "Sécurité": [notes["securite"]],
+        "Fin de poste": [notes["fin_de_poste"]],
+        "Moyenne": [round(moyenne, 2)],
+        "Statut": [statut],
+        "Commentaires": [commentaires]
+    }
+    
+    df = pd.DataFrame(donnees_eval)
+    
+    # Création du fichier Excel en mémoire vive
+    buffer = io.BytesIO()
+    with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name="Évaluation")
+    buffer.seek(0)
+    
+    # Bouton de téléchargement
+    st.download_button(
+        label="💾 Générer et Partager le fichier Excel (.xlsx)",
+        data=buffer,
+        file_name=f"evaluation_{nom_candidat.replace(' ', '_')}_{date_eval}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
