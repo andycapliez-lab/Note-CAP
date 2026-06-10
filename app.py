@@ -9,7 +9,7 @@ from openpyxl.utils import get_column_letter
 st.set_page_config(page_title="Évaluation CAP Conducteur d'Engins", layout="centered")
 
 st.title("🚜 Notation par Compétences - CAP")
-st.write("Grille de notation avec référentiel officiel C3.")
+st.write("Grille de notation officielle avec export Excel auto-ajusté.")
 
 # --- 1. INFORMATIONS GÉNÉRALES ---
 st.header("📋 Informations Générales")
@@ -93,9 +93,9 @@ commentaires = st.text_area("✍️ Observations générales (Points forts / Axe
 
 st.divider()
 
-# --- 4. EXPORT EXCEL ---
+# --- 4. EXPORT EXCEL ULTRA-STYLISÉ AVEC CASES AUTO-AJUSTÉES ---
 if not nom_candidat:
-    st.info("💡 Entrez le nom du candidat pour générer le fichier Excel.")
+    st.info("💡 Entrez le nom du candidat pour débloquer le bouton de téléchargement Excel.")
 else:
     donnees_eval = {
         "Candidat": [nom_candidat],
@@ -121,8 +121,8 @@ else:
         "C3.1_Consignes": [p4_consignes],
         "C3.1_Attitude": [p4_attitude],
         "TOTAL_P4": [total_p4],
-        "NOTE_100": [note_totale_100],
-        "NOTE_20": [note_sur_20],
+        "NOTE BRUTE (/100)": [note_totale_100],
+        "NOTE FINALE (/20)": [note_sur_20],
         "Observations": [commentaires]
     }
     
@@ -133,26 +133,62 @@ else:
         df.to_excel(writer, index=False, sheet_name="Évaluation")
         worksheet = writer.sheets["Évaluation"]
         
-        header_fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
-        header_font = Font(color="FFFFFF", bold=True)
+        # Définition des styles graphiques (Comme l'ancien modèle)
+        font_header = Font(name="Arial", size=10, bold=True, color="FFFFFF")
+        font_body = Font(name="Arial", size=10)
+        fill_header = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid") # Bleu marine professionnel
         
+        thin_border = Border(
+            left=Side(style='thin', color='D9D9D9'), right=Side(style='thin', color='D9D9D9'),
+            top=Side(style='thin', color='D9D9D9'), bottom=Side(style='thin', color='D9D9D9')
+        )
+        
+        # 1. Application du style à l'en-tête (Ligne 1)
+        worksheet.row_dimensions[1].height = 28
         for cell in worksheet[1]:
-            cell.fill = header_fill
-            cell.font = header_font
-            cell.alignment = Alignment(horizontal="center")
-
+            cell.font = font_header
+            cell.fill = fill_header
+            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+            cell.border = thin_border
+        
+        # 2. Application du style aux valeurs (Ligne 2)
+        worksheet.row_dimensions[2].height = 22
+        for cell in worksheet[2]:
+            cell.font = font_body
+            cell.border = thin_border
+            if isinstance(cell.value, (int, float)):
+                cell.alignment = Alignment(horizontal="center", vertical="center")
+            else:
+                cell.alignment = Alignment(vertical="center", horizontal="left")
+        
+        # 3. Coloration intelligente de la note finale sur 20 (Colonne 25)
         cell_note = worksheet.cell(row=2, column=25)
-        cell_note.font = Font(bold=True)
+        cell_note.font = Font(name="Arial", size=11, bold=True)
         if note_sur_20 >= 10:
-            cell_note.fill = PatternFill(start_color="C6EFCE", fill_type="solid")
+            cell_note.fill = PatternFill(start_color="C6EFCE", fill_type="solid") # Vert
         else:
-            cell_note.fill = PatternFill(start_color="FFC7CE", fill_type="solid")
+            cell_note.fill = PatternFill(start_color="FFC7CE", fill_type="solid") # Rouge
 
+        # 4. LE RETOUR DE L'AJUSTEMENT AUTOMATIQUE DES COLONNES
+        for col in worksheet.columns:
+            max_len = 0
+            for cell in col:
+                if cell.value is not None:
+                    # Permet de calculer la longueur réelle même s'il y a des retours à la ligne
+                    lignes_texte = str(cell.value).split('\n')
+                    for l in lignes_texte:
+                        if len(l) > max_len:
+                            max_len = len(l)
+            
+            col_letter = get_column_letter(col[0].column)
+            # On donne une marge de +4 caractères. Taille minimale de 12, taille maximale de 45 (pour les longues observations)
+            worksheet.column_dimensions[col_letter].width = min(max(max_len + 4, 12), 45)
+                
     buffer.seek(0)
     
     st.download_button(
         label="💾 Partager le Bilan de Compétences (Excel)",
         data=buffer,
-        file_name=f"Eval_{classe}_{nom_candidat}.xlsx",
+        file_name=f"Eval_{classe.replace(' ', '_')}_{nom_candidat.replace(' ', '_')}.xlsx",
         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
