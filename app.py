@@ -133,5 +133,26 @@ else:
         df.to_excel(writer, index=False, sheet_name="Évaluation")
         worksheet = writer.sheets["Évaluation"]
         
-        # Styles rapides
-        header_fill = PatternFill(start_color="1F4E7
+        header_fill = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
+        header_font = Font(color="FFFFFF", bold=True)
+        
+        for cell in worksheet[1]:
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal="center")
+
+        cell_note = worksheet.cell(row=2, column=25)
+        cell_note.font = Font(bold=True)
+        if note_sur_20 >= 10:
+            cell_note.fill = PatternFill(start_color="C6EFCE", fill_type="solid")
+        else:
+            cell_note.fill = PatternFill(start_color="FFC7CE", fill_type="solid")
+
+    buffer.seek(0)
+    
+    st.download_button(
+        label="💾 Partager le Bilan de Compétences (Excel)",
+        data=buffer,
+        file_name=f"Eval_{classe}_{nom_candidat}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
