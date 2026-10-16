@@ -8,8 +8,12 @@ from openpyxl.utils import get_column_letter
 # Configuration de la page Streamlit
 st.set_page_config(page_title="Évaluation CAP Conducteur d'Engins", layout="centered")
 
+# Initialisation du stockage de la classe en mémoire de session
+if "liste_evaluations" not in st.session_state:
+    st.session_state.liste_evaluations = []
+
 st.title("🚜 Notation par Compétences - CAP")
-st.write("Grille de notation officielle avec export Excel auto-ajusté.")
+st.write("Grille de notation officielle avec export Excel global par classe.")
 
 # --- 1. INFORMATIONS GÉNÉRALES ---
 st.header("📋 Informations Générales")
@@ -78,7 +82,7 @@ st.markdown(f"**Sous-total Section 4 : `{total_p4} / 20`**")
 st.divider()
 
 # --- 3. CALCUL DU RÉSULTAT FINAL SUR 20 ---
-st.header("📊 Résultat Final")
+st.header("📊 Résultat du Candidat")
 note_totale_100 = total_p1 + total_p2 + total_p3 + total_p4
 note_sur_20 = note_totale_100 / 5
 
@@ -93,57 +97,69 @@ commentaires = st.text_area("✍️ Observations générales (Points forts / Axe
 
 st.divider()
 
-# --- 4. EXPORT EXCEL ULTRA-STYLISÉ AVEC CASES AUTO-AJUSTÉES ---
+# --- 4. AJOUT DU CANDIDAT ET GESTION DE LA CLASSE ---
+st.header("👥 Bilan Global de la Classe")
+
 if not nom_candidat:
-    st.info("💡 Entrez le nom du candidat pour débloquer le bouton de téléchargement Excel.")
+    st.info("💡 Renseignez le Nom & Prénom du candidat pour pouvoir l'ajouter au bilan de la classe.")
 else:
-    donnees_eval = {
-        "Candidat": [nom_candidat],
-        "Classe": [classe],
-        "Évaluateur": [formateur],
-        "Date": [str(date_eval)],
-        "Engin": [engin],
-        "C3.5_Visuel": [p1_visuel],
-        "C3.5_Niveaux": [p1_niveaux],
-        "C3.2_Secu_Poste": [p1_securite],
-        "C2.1_Docs": [p1_docs],
-        "TOTAL_P1": [total_p1],
-        "C3.11_Commandes": [p2_commandes],
-        "C3.2_Secu_Cond": [p2_securite],
-        "C3.9_Precision": [p2_precision],
-        "C3.11_Adapt": [p2_terrain],
-        "TOTAL_P2": [total_p2],
-        "C3.1_Nettoyage": [p3_nettoyage],
-        "C3.5_Anomalies": [p3_anomalies],
-        "C3.2_Stationnement": [p3_stationnement],
-        "C3.5_Fiche": [p3_fiche],
-        "TOTAL_P3": [total_p3],
-        "C3.1_Consignes": [p4_consignes],
-        "C3.1_Attitude": [p4_attitude],
-        "TOTAL_P4": [total_p4],
-        "NOTE BRUTE (/100)": [note_totale_100],
-        "NOTE FINALE (/20)": [note_sur_20],
-        "Observations": [commentaires]
-    }
+    if st.button("➕ Ajouter cet élève au récapitulatif de la classe", type="primary"):
+        nouvel_eleve = {
+            "Candidat": nom_candidat,
+            "Classe": classe,
+            "Évaluateur": formateur,
+            "Date": str(date_eval),
+            "Engin": engin,
+            "C3.5_Visuel": p1_visuel,
+            "C3.5_Niveaux": p1_niveaux,
+            "C3.2_Secu_Poste": p1_securite,
+            "C2.1_Docs": p1_docs,
+            "TOTAL_P1": total_p1,
+            "C3.11_Commandes": p2_commandes,
+            "C3.2_Secu_Cond": p2_securite,
+            "C3.9_Precision": p2_precision,
+            "C3.11_Adapt": p2_terrain,
+            "TOTAL_P2": total_p2,
+            "C3.1_Nettoyage": p3_nettoyage,
+            "C3.5_Anomalies": p3_anomalies,
+            "C3.2_Stationnement": p3_stationnement,
+            "C3.5_Fiche": p3_fiche,
+            "TOTAL_P3": total_p3,
+            "C3.1_Consignes": p4_consignes,
+            "C3.1_Attitude": p4_attitude,
+            "TOTAL_P4": total_p4,
+            "NOTE BRUTE (/100)": note_totale_100,
+            "NOTE FINALE (/20)": note_sur_20,
+            "Observations": commentaires
+        }
+        st.session_state.liste_evaluations.append(nouvel_eleve)
+        st.toast(f"✅ {nom_candidat} a été ajouté au bilan de la classe !", icon="✅")
+
+# Affichage du tableau de la classe s'il y a au moins un élève
+if len(st.session_state.liste_evaluations) > 0:
+    df_classe = pd.DataFrame(st.session_state.liste_evaluations)
     
-    df = pd.DataFrame(donnees_eval)
+    st.subheader(f"Élèves enregistrés ({len(df_classe)})")
+    st.dataframe(df_classe[["Candidat", "Classe", "Engin", "NOTE FINALE (/20)", "Observations"]], use_container_width=True)
+
+    # --- GENERATION FICHIER EXCEL GLOBAL ---
     buffer = io.BytesIO()
     
     with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
-        df.to_excel(writer, index=False, sheet_name="Évaluation")
-        worksheet = writer.sheets["Évaluation"]
+        df_classe.to_excel(writer, index=False, sheet_name="Résultats Classe")
+        worksheet = writer.sheets["Résultats Classe"]
         
-        # Définition des styles graphiques (Comme l'ancien modèle)
+        # Styles graphiques
         font_header = Font(name="Arial", size=10, bold=True, color="FFFFFF")
         font_body = Font(name="Arial", size=10)
-        fill_header = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid") # Bleu marine professionnel
+        fill_header = PatternFill(start_color="1F4E78", end_color="1F4E78", fill_type="solid")
         
         thin_border = Border(
             left=Side(style='thin', color='D9D9D9'), right=Side(style='thin', color='D9D9D9'),
             top=Side(style='thin', color='D9D9D9'), bottom=Side(style='thin', color='D9D9D9')
         )
         
-        # 1. Application du style à l'en-tête (Ligne 1)
+        # 1. En-tête (Ligne 1)
         worksheet.row_dimensions[1].height = 28
         for cell in worksheet[1]:
             cell.font = font_header
@@ -151,44 +167,52 @@ else:
             cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
             cell.border = thin_border
         
-        # 2. Application du style aux valeurs (Ligne 2)
-        worksheet.row_dimensions[2].height = 22
-        for cell in worksheet[2]:
-            cell.font = font_body
-            cell.border = thin_border
-            if isinstance(cell.value, (int, float)):
-                cell.alignment = Alignment(horizontal="center", vertical="center")
-            else:
-                cell.alignment = Alignment(vertical="center", horizontal="left")
-        
-        # 3. Coloration intelligente de la note finale sur 20 (Colonne 25)
-        cell_note = worksheet.cell(row=2, column=25)
-        cell_note.font = Font(name="Arial", size=11, bold=True)
-        if note_sur_20 >= 10:
-            cell_note.fill = PatternFill(start_color="C6EFCE", fill_type="solid") # Vert
-        else:
-            cell_note.fill = PatternFill(start_color="FFC7CE", fill_type="solid") # Rouge
+        # 2. Application du style à TOUTES les lignes d'élèves
+        for row_idx in range(2, len(df_classe) + 2):
+            worksheet.row_dimensions[row_idx].height = 22
+            for cell in worksheet[row_idx]:
+                cell.font = font_body
+                cell.border = thin_border
+                if isinstance(cell.value, (int, float)):
+                    cell.alignment = Alignment(horizontal="center", vertical="center")
+                else:
+                    cell.alignment = Alignment(vertical="center", horizontal="left")
+            
+            # Coloration conditionnelle de la Note Finale (Colonne 25)
+            cell_note = worksheet.cell(row=row_idx, column=25)
+            cell_note.font = Font(name="Arial", size=11, bold=True)
+            if cell_note.value is not None and isinstance(cell_note.value, (int, float)):
+                if cell_note.value >= 10:
+                    cell_note.fill = PatternFill(start_color="C6EFCE", fill_type="solid") # Vert
+                else:
+                    cell_note.fill = PatternFill(start_color="FFC7CE", fill_type="solid") # Rouge
 
-        # 4. LE RETOUR DE L'AJUSTEMENT AUTOMATIQUE DES COLONNES
+        # 3. Ajustement automatique des colonnes
         for col in worksheet.columns:
             max_len = 0
             for cell in col:
                 if cell.value is not None:
-                    # Permet de calculer la longueur réelle même s'il y a des retours à la ligne
                     lignes_texte = str(cell.value).split('\n')
                     for l in lignes_texte:
                         if len(l) > max_len:
                             max_len = len(l)
-            
             col_letter = get_column_letter(col[0].column)
-            # On donne une marge de +4 caractères. Taille minimale de 12, taille maximale de 45 (pour les longues observations)
             worksheet.column_dimensions[col_letter].width = min(max(max_len + 4, 12), 45)
-                
+
     buffer.seek(0)
     
-    st.download_button(
-        label="💾 Partager le Bilan de Compétences (Excel)",
-        data=buffer,
-        file_name=f"Eval_{classe.replace(' ', '_')}_{nom_candidat.replace(' ', '_')}.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    )
+    col_dl, col_reset = st.columns([2, 1])
+    
+    with col_dl:
+        st.download_button(
+            label="💾 Télécharger la Liste Globale de la Classe (Excel)",
+            data=buffer,
+            file_name=f"Notes_Classe_{classe.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d')}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            type="primary"
+        )
+    
+    with col_reset:
+        if st.button("🗑️ Vider la liste / Nouvelle classe"):
+            st.session_state.liste_evaluations = []
+            st.rerun()
