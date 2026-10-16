@@ -13,7 +13,7 @@ if "liste_evaluations" not in st.session_state:
     st.session_state.liste_evaluations = []
 
 st.title("🚜 Notation par Compétences - CAP")
-st.write("Grille de notation officielle avec export Excel global par classe.")
+st.write("Grille de notation officielle avec référentiel CACES R482 et export Excel classe.")
 
 # --- 1. INFORMATIONS GÉNÉRALES ---
 st.header("📋 Informations Générales")
@@ -29,9 +29,19 @@ with col2:
         "Classe du Candidat",
         ["CAP 1 A", "CAP 1 B", "CAP 2 A", "CAP 2 B", "CAP 1AN", "Adulte / Formation Continue"]
     )
+    
+    # Engins avec la catégorie CACES R482 en premier
     engin = st.selectbox(
-        "Type d'engin",
-        ["Pelle Hydraulique", "Mini-pelle", "Chargeuse", "Tombereau", "Compacteur", "Bouteur", "Chariot"]
+        "Engin & Catégorie CACES R482",
+        [
+            "Catégorie A - Mini-pelle (≤ 6t)",
+            "Catégorie A - Compacteur léger (≤ 4,5t)",
+            "Catégorie B1 - Pelle Hydraulique (> 6t)",
+            "Catégorie C1 - Chargeuse",
+            "Catégorie C1 - Bouteur",
+            "Catégorie C1 - Tombereau",
+            "Catégorie F - Chariot télescopique / tout-terrain"
+        ]
     )
 
 st.divider()
@@ -72,26 +82,34 @@ st.markdown(f"**Sous-total Section 3 : `{total_p3} / 20`**")
 
 st.divider()
 
-# --- SECTION 4 : COMPORTEMENT ---
-st.subheader("4. Professionnalisme [C3.1] (/20)")
+# --- SECTION 4 : COMPORTEMENT ET FAUTE ÉLIMINATOIRE ---
+st.subheader("4. Professionnalisme & Sécurité [C3.1] (/20)")
 p4_consignes = st.slider("[C3.1] Respect des consignes orales/écrites", 0, 10, 8)
 p4_attitude = st.slider("[C3.1] Attitude et communication pro", 0, 10, 8)
 total_p4 = p4_consignes + p4_attitude
 st.markdown(f"**Sous-total Section 4 : `{total_p4} / 20`**")
 
+st.write("")
+faute_grave = st.checkbox("🚨 **Faute grave de sécurité (Éliminatoire)**", help="Cochez si le candidat a commis un manquement grave aux consignes de sécurité (ex: absence de ceinture, manœuvre sous ligne électrique).")
+
 st.divider()
 
 # --- 3. CALCUL DU RÉSULTAT FINAL SUR 20 ---
 st.header("📊 Résultat du Candidat")
+
 note_totale_100 = total_p1 + total_p2 + total_p3 + total_p4
 note_sur_20 = note_totale_100 / 5
 
-st.metric(label="NOTE FINALE", value=f"{note_sur_20} / 20")
-
-if note_sur_20 >= 10:
+if faute_grave:
+    note_sur_20 = 0.0
+    st.error("🚨 **RÉSULTAT : NON VALIDÉ (Faute grave de sécurité éliminatoire)**")
+    st.metric(label="NOTE FINALE", value="0 / 20 (Éliminé)")
+elif note_sur_20 >= 10:
     st.success("🎉 **Validation réussie (Moyenne atteinte)**")
+    st.metric(label="NOTE FINALE", value=f"{note_sur_20} / 20")
 else:
     st.error("⚠️ **Insuffisant (En dessous de la moyenne)**")
+    st.metric(label="NOTE FINALE", value=f"{note_sur_20} / 20")
 
 commentaires = st.text_area("✍️ Observations générales (Points forts / Axes d'amélioration)")
 
@@ -109,7 +127,8 @@ else:
             "Classe": classe,
             "Évaluateur": formateur,
             "Date": str(date_eval),
-            "Engin": engin,
+            "Engin / CACES": engin,
+            "Faute Éliminatoire": "OUI" if faute_grave else "NON",
             "C3.5_Visuel": p1_visuel,
             "C3.5_Niveaux": p1_niveaux,
             "C3.2_Secu_Poste": p1_securite,
@@ -128,21 +147,24 @@ else:
             "C3.1_Consignes": p4_consignes,
             "C3.1_Attitude": p4_attitude,
             "TOTAL_P4": total_p4,
-            "NOTE BRUTE (/100)": note_totale_100,
+            "NOTE BRUTE (/100)": note_totale_100 if not faute_grave else 0,
             "NOTE FINALE (/20)": note_sur_20,
             "Observations": commentaires
         }
         st.session_state.liste_evaluations.append(nouvel_eleve)
-        st.toast(f"✅ {nom_candidat} a été ajouté au bilan de la classe !", icon="✅")
+        st.toast(f"✅ {nom_candidat} a été ajouté au bilan !", icon="✅")
 
-# Affichage du tableau de la classe s'il y a au moins un élève
+# Affichage du tableau de la classe
 if len(st.session_state.liste_evaluations) > 0:
     df_classe = pd.DataFrame(st.session_state.liste_evaluations)
     
     st.subheader(f"Élèves enregistrés ({len(df_classe)})")
-    st.dataframe(df_classe[["Candidat", "Classe", "Engin", "NOTE FINALE (/20)", "Observations"]], use_container_width=True)
+    st.dataframe(
+        df_classe[["Candidat", "Classe", "Engin / CACES", "Faute Éliminatoire", "NOTE FINALE (/20)", "Observations"]], 
+        use_container_width=True
+    )
 
-    # --- GENERATION FICHIER EXCEL GLOBAL ---
+    # --- GÉNÉRATION FICHIER EXCEL GLOBAL ---
     buffer = io.BytesIO()
     
     with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
@@ -159,7 +181,7 @@ if len(st.session_state.liste_evaluations) > 0:
             top=Side(style='thin', color='D9D9D9'), bottom=Side(style='thin', color='D9D9D9')
         )
         
-        # 1. En-tête (Ligne 1)
+        # 1. Style En-tête (Ligne 1)
         worksheet.row_dimensions[1].height = 28
         for cell in worksheet[1]:
             cell.font = font_header
@@ -167,7 +189,11 @@ if len(st.session_state.liste_evaluations) > 0:
             cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
             cell.border = thin_border
         
-        # 2. Application du style à TOUTES les lignes d'élèves
+        # Identification dynamique des colonnes spéciales pour la mise en forme
+        col_note_idx = df_classe.columns.get_loc("NOTE FINALE (/20)") + 1
+        col_elim_idx = df_classe.columns.get_loc("Faute Éliminatoire") + 1
+        
+        # 2. Application du style à chaque élève
         for row_idx in range(2, len(df_classe) + 2):
             worksheet.row_dimensions[row_idx].height = 22
             for cell in worksheet[row_idx]:
@@ -178,16 +204,21 @@ if len(st.session_state.liste_evaluations) > 0:
                 else:
                     cell.alignment = Alignment(vertical="center", horizontal="left")
             
-            # Coloration conditionnelle de la Note Finale (Colonne 25)
-            cell_note = worksheet.cell(row=row_idx, column=25)
+            # Coloration conditionnelle de la Note Finale
+            cell_note = worksheet.cell(row=row_idx, column=col_note_idx)
+            cell_elim = worksheet.cell(row=row_idx, column=col_elim_idx)
             cell_note.font = Font(name="Arial", size=11, bold=True)
-            if cell_note.value is not None and isinstance(cell_note.value, (int, float)):
+            
+            if cell_elim.value == "OUI":
+                cell_note.fill = PatternFill(start_color="FFC7CE", fill_type="solid") # Rouge si éliminé
+                cell_elim.fill = PatternFill(start_color="FFC7CE", fill_type="solid")
+            elif cell_note.value is not None and isinstance(cell_note.value, (int, float)):
                 if cell_note.value >= 10:
                     cell_note.fill = PatternFill(start_color="C6EFCE", fill_type="solid") # Vert
                 else:
                     cell_note.fill = PatternFill(start_color="FFC7CE", fill_type="solid") # Rouge
 
-        # 3. Ajustement automatique des colonnes
+        # 3. Ajustement automatique de la largeur des colonnes
         for col in worksheet.columns:
             max_len = 0
             for cell in col:
